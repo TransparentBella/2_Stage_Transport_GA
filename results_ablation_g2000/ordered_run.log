@@ -1,0 +1,6 @@
+start top3_single_pass_ls at 2026-06-09 23:42:59
+end top3_single_pass_ls at 2026-06-10 10:06:07 exit=0
+start final_only_top3_single_pass at 2026-06-10 10:06:08
+end final_only_top3_single_pass at 2026-06-10 13:07:42 exit=0
+start top3_full_ls at 2026-06-10 13:07:42
+end top3_full_ls at 2026-06-10 17:21:17 exit=0

@@ -1,0 +1,7 @@
+# Python dependencies for data export, OR-Tools validation, and result summaries.
+# The C++ executable still requires a local C++17 compiler such as MinGW g++.
+numpy>=1.24
+pandas>=2.0
+openpyxl>=3.1
+ortools>=9.8
+gurobipy>=11.0

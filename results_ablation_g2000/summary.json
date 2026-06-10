@@ -1,0 +1,38 @@
+[
+  {
+    "run": "final_only_top3_single_pass",
+    "best_objective": 1455550.5166,
+    "runtime_s": 10893.19,
+    "elitism_events": 3,
+    "first_elitism_extra_s": null,
+    "population": 100,
+    "generations": 2000,
+    "elitism_top_k": 3,
+    "ls_single_pass": true,
+    "elitism_final_only": true
+  },
+  {
+    "run": "top3_full_ls",
+    "best_objective": 1454827.8728,
+    "runtime_s": 15212.99,
+    "elitism_events": 120,
+    "first_elitism_extra_s": 120.30999999999997,
+    "population": 100,
+    "generations": 2000,
+    "elitism_top_k": 3,
+    "ls_single_pass": false,
+    "elitism_final_only": false
+  },
+  {
+    "run": "top3_single_pass_ls",
+    "best_objective": 1454827.8728,
+    "runtime_s": 37387.46,
+    "elitism_events": 120,
+    "first_elitism_extra_s": 12.839999999999975,
+    "population": 100,
+    "generations": 2000,
+    "elitism_top_k": 3,
+    "ls_single_pass": true,
+    "elitism_final_only": false
+  }
+]

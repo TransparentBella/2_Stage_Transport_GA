@@ -1,0 +1,9 @@
+{
+  "best_objective": 1455571.107500,
+  "generations": 5,
+  "population": 4,
+  "elitism_interval": 50,
+  "mutation_rate": 0.030000,
+  "checkpoint_interval": 1,
+  "seed": 42
+}

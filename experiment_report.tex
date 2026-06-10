@@ -1,0 +1,227 @@
+\documentclass{article}
+
+\usepackage[UTF8]{ctex}
+\usepackage[a4paper,margin=2.54cm]{geometry}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage{pgfplots}
+\usepackage{float}
+\pgfplotsset{compat=1.18}
+
+\title{基于 Goldberg 最小费用流的 TSCFLP 遗传算法复现实验与局部搜索改进分析}
+\author{}
+\date{2026年6月}
+
+\begin{document}
+\maketitle
+
+\section{实验对象与数据结构}
+
+本文复现 Fernandes 等提出的两阶段容量设施选址问题（Two-Stage Capacitated Facility Location Problem, TSCFLP）遗传算法。给定工厂集合 $I$、中转仓库集合 $J$ 与客户集合 $K$，染色体采用二进制编码：
+\[
+    (y_1,\ldots,y_{|I|},z_1,\ldots,z_{|J|}),
+\]
+其中 $y_i=1$ 表示工厂 $i$ 开放，$z_j=1$ 表示仓库 $j$ 开放。固定染色体后，设施开闭状态已知，剩余运输分配问题转化为最小费用流问题。目标函数为
+\[
+    \min \sum_{i\in I} f_i y_i+\sum_{j\in J} g_j z_j
+    +\sum_{i\in I}\sum_{j\in J} c_{ij}x_{ij}
+    +\sum_{j\in J}\sum_{k\in K} d_{jk}s_{jk}.
+\]
+
+本次实验只使用老师提供的 \texttt{data\_100200400.xlsx} 数据集，其规模如下：
+
+\begin{table}[H]
+\centering
+\caption{实验数据规模}
+\begin{tabular}{lrrrr}
+\toprule
+数据集 & $|I|$ & $|J|$ & $|K|$ & 染色体长度 \\
+\midrule
+\texttt{data\_100200400} & 100 & 200 & 400 & 300 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+该数据集对应第一阶段运输边 $100\times 200=20000$ 条，第二阶段运输边 $200\times 400=80000$ 条。因此，若每次邻域评价都完整调用最小费用流算法，则局部搜索阶段的计算量会迅速放大。
+
+\section{严格复现方案及计算瓶颈}
+
+严格复现版本按照论文 Algorithm 3 的描述实现。主要参数与算法步骤如下：
+
+\begin{table}[H]
+\centering
+\caption{严格复现版本参数}
+\begin{tabular}{ll}
+\toprule
+参数或模块 & 设置 \\
+\midrule
+种群规模 & 50 \\
+最大迭代次数 & 2000 \\
+变异概率 & 0.03 \\
+周期性强化间隔 & $N=50$ \\
+初始种群 & 1 个 CH2 个体，其余由 CH1 生成 \\
+适应度评价 & 固定设施后调用 Goldberg-style 最小费用流 \\
+不可行染色体处理 & 不运行最小费用流，直接丢弃或跳过 \\
+局部搜索 & LS1 后接 LS2，发现改进解立即作为当前解 \\
+周期性 Elitism & 每 50 代对当前整个种群逐个执行 LS1+LS2 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+论文原文明确指出：当发现改进邻域解时，该解成为新的当前解；邻域搜索对工厂和仓库迭代进行，直到无法找到更优邻域解。同时，Algorithm 3 中要求每隔 $N$ 代对 whole population 执行 BL1 followed by BL2。因此，严格版本在第 50 代会对种群中所有 50 个个体执行完整 LS1+LS2。
+
+实际运行表明，严格版本的主要瓶颈集中在周期性 Elitism 阶段。第 50 代前 49 代仅用约 439.62 秒，但进入第 50 代后，局部搜索在第 1、2 个个体上即出现长时间计算：
+
+\begin{table}[H]
+\centering
+\caption{严格复现版本第 50 代运行片段}
+\begin{tabular}{lrr}
+\toprule
+日志事件 & 累计时间(s) & 当前最优值 \\
+\midrule
+generation 49 checkpoint & 439.62 & 1455571.1075 \\
+generation 50 elitism 1/50 & 853.25 & 1454827.8728 \\
+generation 50 elitism 2/50 & 7925.53 & 1454827.8728 \\
+resume 后 generation 50 elitism 1/50 & 340.77 & 1454827.8728 \\
+resume 后 generation 50 elitism 2/50 & 5229.87 & 1454827.8728 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+由此可见，时间爆炸并非发生在普通遗传迭代，而是发生在完整局部搜索中。原因在于 LS1 需要尝试单设施翻转，LS2 需要尝试同层 opened--closed 设施交换；每个可行邻域解均需一次最小费用流评价。即使采用首次提升策略，只要继续迭代直到局部最优，一个个体仍可能触发大量邻域评价。
+
+\section{改进实验设计}
+
+根据老师建议，本文构造三组改进实验。三组实验均保持如下公共设置：
+
+\begin{itemize}
+    \item 数据集为 \texttt{data\_100200400}；
+    \item 种群规模设为 100；
+    \item 最大迭代次数设为 2000；
+    \item 变异概率设为 0.03；
+    \item 最小费用流后端为已通过单染色体验证的 Goldberg-style 实现；
+    \item 评价前先进行容量可行性检查，不可行邻域解不调用最小费用流；
+    \item 建图时只为开放工厂和开放仓库生成运输边，该处理与关闭设施容量为 0 的完整建图等价，但减少了残量网络规模。
+\end{itemize}
+
+三组实验分别对应三类改进思路。
+
+\subsection{实验一：缩小 Elitism 作用范围}
+
+实验 \texttt{top3\_full\_ls} 将周期性 Elitism 的作用范围由整个种群改为当前种群排名前 3 的精英个体。每个精英个体仍执行完整迭代式 LS1+LS2。因此，该实验主要检验“减少局部搜索对象数量”能否降低总时间。
+
+该调整的合理性在于：论文中 Elitism 的目的在于强化高质量个体，而当前种群中排名靠后的个体被进一步强化后进入下一代的概率较低。将局部搜索集中到排名靠前个体，保留了精英强化的主要作用，同时避免对大量低质量个体进行高成本搜索。
+
+\subsection{实验二：首次提升的单轮局部搜索}
+
+实验 \texttt{top3\_single\_pass\_ls} 在实验一的基础上，进一步将 LS1 和 LS2 改为单轮首次提升。即在 LS1 中扫描邻域时，一旦发现更优解即接受并退出 LS1；LS2 同理，一旦发现更优交换即接受并退出 LS2。不再重复迭代至邻域局部最优。
+
+该调整区别于严格论文版本。论文中的局部搜索会在发现改进后继续迭代，直到无法再改进；本实验保留“发现改进即接受”的基本方向，但停止条件提前。理论上，单轮搜索显著减少每次 Elitism 调用中的最小费用流次数，因此可降低第 50、100、$\ldots$ 代的时间峰值。
+
+\subsection{实验三：仅最后一代执行局部搜索}
+
+实验 \texttt{final\_only\_top3\_single\_pass} 将周期性局部搜索改为仅在最后一代执行，同时仍只作用于排名前 3 个体，并采用单轮首次提升。该策略将局部搜索从进化过程中的周期性强化改为后处理。
+
+该调整的理论动机是：若主要计算目标是获得可接受质量的最终解，而非严格模拟每 50 代强化过程，则可将高成本局部搜索推迟到末代，避免其反复打断遗传迭代。该策略牺牲了局部搜索对中间种群进化方向的反馈作用，因此预期速度最快，但解质量可能低于周期性强化策略。
+
+\section{正确性控制}
+
+为保证调整后的实验结果仍具有可比性，本文进行了以下控制：
+
+\begin{enumerate}
+    \item 固定同一数据集、同一随机种子、同一种群规模和同一最大迭代次数；
+    \item 所有染色体评价均使用相同的固定设施最小费用流模型；
+    \item 对同一 \texttt{ch2.csv} 单染色体，OR-Tools、原 C++ SSP 与 Goldberg-style 后端均得到相同目标值 1455571.107500；
+    \item 建图稀疏化只删除关闭设施相关边，与关闭设施容量为 0 的完整网络等价；
+    \item 不可行解先由容量条件过滤，不参与最小费用流求解，符合论文“the algorithm is not run for an infeasible solution”的要求。
+\end{enumerate}
+
+需要说明的是，三组改进实验不再声称严格等同论文 Algorithm 3，而是作为针对局部搜索计算瓶颈的加速变体。其结果用于分析速度--质量权衡。
+
+\section{实验结果}
+
+Gurobi 精确求解结果为 1452505.84，老师提供的 GA 参考结果为 1454645.16，对应相对 Gurobi gap 约 0.1473\%。三组 2000 代实验结果如下。
+
+\begin{table}[H]
+\centering
+\caption{三组改进实验结果}
+\begin{tabular}{lrrrrr}
+\toprule
+实验 & 最优适应度 & 相对 Gurobi gap(\%) & 与老师 GA 差值 & 用时(s) & 用时(h) \\
+\midrule
+\texttt{top3\_single\_pass\_ls} & 1454827.8728 & 0.1599 & 182.7128 & 37387.46 & 10.39 \\
+\texttt{final\_only\_top3\_single\_pass} & 1455550.5166 & 0.2096 & 905.3566 & 10893.19 & 3.03 \\
+\texttt{top3\_full\_ls} & 1454827.8728 & 0.1599 & 182.7128 & 15212.99 & 4.23 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+从解质量看，\texttt{top3\_single\_pass\_ls} 与 \texttt{top3\_full\_ls} 均得到 1454827.8728，相对 Gurobi gap 为 0.1599\%，略差于老师报告的 1454645.16，但已处于同一数量级。仅最后一代执行局部搜索的实验得到 1455550.5166，解质量相对较弱，说明周期性局部搜索仍具有引导进化过程的作用。
+
+从运行时间看，三组实验差异明显。\texttt{final\_only\_top3\_single\_pass} 用时最短，为 10893.19 秒；\texttt{top3\_full\_ls} 用时 15212.99 秒；\texttt{top3\_single\_pass\_ls} 用时最高，为 37387.46 秒。后者虽然每次局部搜索较轻，但每 50 代均执行一次，在 2000 代中累计执行 40 轮；而 \texttt{top3\_full\_ls} 在部分个体上很快达到稳定，因此总时间反而低于单轮版本。该现象说明局部搜索的实际耗时不仅取决于单次邻域扫描范围，也取决于每轮搜索后种群结构和缓存命中情况。
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+    ybar,
+    width=0.92\textwidth,
+    height=7cm,
+    ylabel={运行时间（秒）},
+    symbolic x coords={top3 single pass,final only,top3 full},
+    xtick=data,
+    x tick label style={rotate=15,anchor=east},
+    nodes near coords,
+    nodes near coords align={vertical},
+    ymin=0,
+    bar width=22pt
+]
+\addplot coordinates {
+    (top3 single pass,37387.46)
+    (final only,10893.19)
+    (top3 full,15212.99)
+};
+\end{axis}
+\end{tikzpicture}
+\caption{三组 2000 代实验运行时间对比}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+    ybar,
+    width=0.92\textwidth,
+    height=7cm,
+    ylabel={目标函数值},
+    symbolic x coords={top3 single pass,final only,top3 full,teacher GA,Gurobi},
+    xtick=data,
+    x tick label style={rotate=20,anchor=east},
+    nodes near coords,
+    nodes near coords align={vertical},
+    ymin=1452000,
+    ymax=1456000,
+    bar width=16pt
+]
+\addplot coordinates {
+    (top3 single pass,1454827.8728)
+    (final only,1455550.5166)
+    (top3 full,1454827.8728)
+    (teacher GA,1454645.16)
+    (Gurobi,1452505.84)
+};
+\end{axis}
+\end{tikzpicture}
+\caption{三组实验与参考结果的目标值对比}
+\end{figure}
+
+\section{结论}
+
+严格按照论文进行复现时，主要瓶颈来自每 50 代对整个种群执行完整 LS1+LS2。由于每个邻域解均需一次最小费用流求解，且数据集包含 100 个工厂、200 个仓库和 400 个客户，周期性 Elitism 阶段会形成远高于普通遗传迭代的计算峰值。
+
+三组改进实验表明，缩小 Elitism 范围和改变局部搜索触发方式能够显著降低计算量。仅最后一代执行局部搜索速度最快，但解质量下降较明显；前 3 精英完整局部搜索在本次实验中取得与单轮周期性搜索相同的目标值，且总时间更短；前 3 精英单轮周期性搜索虽然单次 Elitism 较轻，但累计时间最高。综合考虑解质量与时间，\texttt{top3\_full\_ls} 在本次实验中具有较好的速度--质量折中，而 \texttt{final\_only\_top3\_single\_pass} 可作为快速基线。
+
+\end{document}

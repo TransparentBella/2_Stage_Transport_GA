@@ -1,0 +1,12 @@
+{
+  "best_objective": 1454827.872800,
+  "generations": 51,
+  "population": 100,
+  "elitism_interval": 50,
+  "mutation_rate": 0.030000,
+  "checkpoint_interval": 1,
+  "elitism_top_k": 3,
+  "ls_single_pass": false,
+  "elitism_final_only": false,
+  "seed": 42
+}

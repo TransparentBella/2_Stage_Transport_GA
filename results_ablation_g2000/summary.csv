@@ -1,0 +1,4 @@
+run,best_objective,runtime_s,elitism_events,first_elitism_extra_s,population,generations,elitism_top_k,ls_single_pass,elitism_final_only
+final_only_top3_single_pass,1455550.5166,10893.19,3,,100,2000,3,True,True
+top3_full_ls,1454827.8728,15212.99,120,120.30999999999997,100,2000,3,False,False
+top3_single_pass_ls,1454827.8728,37387.46,120,12.839999999999975,100,2000,3,True,False
