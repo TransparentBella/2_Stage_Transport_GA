@@ -1,0 +1,4 @@
+generation=0, runtime=0.50s, best_objective=1455571.107500, note=start
+generation=1, runtime=1.16s, best_objective=1455571.107500, note=checkpoint
+generation=2, runtime=1.68s, best_objective=1455571.107500, note=checkpoint
+generation=2, runtime=1.68s, best_objective=1455571.107500, note=finished
